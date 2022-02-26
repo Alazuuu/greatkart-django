@@ -1,5 +1,5 @@
 from django.shortcuts import render,get_object_or_404,redirect
-from .models import Product,ReviewRating 
+from .models import Product,ReviewRating ,ProductGallery
 from .models import Category
 from carts.models import CartItem
 from carts.views import _cart_id
@@ -15,26 +15,63 @@ def store(request, category_slug=None):
     
     categories=None
     products = None
+    url = request.META.get('HTTP_REFERER') # previos url where you come
+    try:
+        print("before query")
+        requests.utils.urlparse
+        query = requests.utils.urlparse(url).query
+        print("afrt query")
+        params = dict(x.split('=') for x in query.split('&'))
+        if 'category' in params:
+            next_page = params['category']
+    except:
+        pass
 
-    if category_slug != None:
-        categories = get_object_or_404(Category, slug = category_slug)
-        products= Product.objects.filter(category=categories, is_available=True)
-        paginator = Paginator(products,1)
-        page = request.GET.get('page')
-        paged_products = paginator.get_page(page)
-        product_count =products.count()
+   
+    if request.method == 'POST':
+        max = request.POST['max']
+        min = request.POST['min']
+        if category_slug !=None:
+            categories= get_object_or_404(Category,slug=category_slug)
+            products = Product.objects.filter(
+                category=categories, is_available = True ,price__gte=min, price__lte=max).order_by('id')
+            paginator = Paginator(products,6)
+            page = request.GET.get('page')
+            paged_products = paginator.get_page(page)
+            product_count = products.count()
+ 
+        else:
+            products = Product.objects.all().filter(
+                is_available = True,price__gte=min, price__lte=max).order_by('id') 
+            paginator = Paginator(products,6)
+            page = request.GET.get('page')
+            paged_products = paginator.get_page(page)
+            product_count = products.count()
+        
     else:
-        products = Product.objects.all().filter(is_available=True).order_by('id')
-        paginator = Paginator(products,3)
-        page = request.GET.get('page')
-        paged_products = paginator.get_page(page)
-        product_count =products.count()
-    
-    context={
-        'products':paged_products,
-        'product_count':product_count,
+        if category_slug !=None:
+            categories= get_object_or_404(Category,slug=category_slug)
+            products = Product.objects.filter(category=categories, is_available = True).order_by('id')
+            paginator = Paginator(products,6)
+            page = request.GET.get('page')
+            paged_products = paginator.get_page(page)
+            product_count = products.count()
+
+        else:
+            print('last else')
+            products = Product.objects.all().filter(
+                is_available = True).order_by('id')
+            paginator = Paginator(products,6)
+            page = request.GET.get('page')
+            paged_products = paginator.get_page(page)
+            product_count = products.count()
+
+    context ={'products': paged_products,
+              'product_count':product_count,
+              'paginator' : paginator,
     }
-    return render(request, 'store/store.html',context)
+    return render(request,'store/store.html',context)
+
 def product_detail(request,category_slug,product_slug):
     try:
        single_product =Product.objects.get(category__slug=category_slug, slug =product_slug)
@@ -53,11 +90,14 @@ def product_detail(request,category_slug,product_slug):
 
     reviews = ReviewRating.objects.filter(product_id= single_product.id, status = True)
 
+    product_gallery = ProductGallery.objects.filter(product_id=single_product.id)
+
     context ={
         "single_product":single_product,
         "in_cart"       :in_cart,
         "orderproduct": orderproduct,
         'reviews': reviews,
+        'product_gallery': product_gallery,
 
     }
 
@@ -100,3 +140,6 @@ def submit_review(request,product_id):
                 messages.success(request, "Thank you! Your review has been submitted.")
             return redirect(url)
                 
+      
+
+    
